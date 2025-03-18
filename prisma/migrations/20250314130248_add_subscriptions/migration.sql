@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Subscription" ALTER COLUMN "repo" SET NOT NULL,
+ALTER COLUMN "repo" SET DATA TYPE TEXT;
