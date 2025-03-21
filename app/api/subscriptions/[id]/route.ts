@@ -2,7 +2,7 @@
 import { PrismaClient } from '@prisma/client';
 import axios from 'axios';
 import { auth } from '~/auth';
-import { NextResponse } from 'next/server';
+import { NextResponse, NextRequest } from 'next/server';
 import dayjs from 'dayjs';
 
 const prisma = new PrismaClient();
@@ -62,11 +62,9 @@ async function fetchPullRequests(repo: string, date: string) {
 }
 
 // 处理 GET 请求 - 获取指定订阅的更新信息
-export async function GET(req: Request, { params }: { params: { id: string } }) {
-  const { id } = await params;
-  if (!id) {
-    return NextResponse.json({ error: 'Subscription ID is required' }, { status: 400 });
-  }
+export async function GET(req: NextRequest) {
+  const url = new URL(req.url); 
+  const id = url.pathname.split("/").pop(); // 获取路径中的 id
 
   const session = await auth();
   if (session && session.user) {

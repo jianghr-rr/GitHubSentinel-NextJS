@@ -2,6 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  output: 'standalone',
+  pageExtensions: ['js', 'jsx', 'mdx', 'ts', 'tsx'],
+  transpilePackages: ['next-international', 'international-types'],
   images: {
     domains: ['avatars.githubusercontent.com'], // 允许加载的图片源
     deviceSizes: [640, 750, 828, 1080, 1200, 1920], // 默认支持的尺寸
