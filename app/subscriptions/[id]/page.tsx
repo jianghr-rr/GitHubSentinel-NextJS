@@ -4,17 +4,22 @@
 import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import axios from 'axios';
-import { Card, Alert, Spinner, Datepicker } from 'flowbite-react';
+import { Card, Alert, Spinner, Datepicker, Modal, Button } from 'flowbite-react';
 import { useParams } from 'next/navigation';
 import dayjs from 'dayjs';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 export default function SubscriptionDetail() {
+  const [repositoryName, setRepositoryName] = useState('');
   const [commits, setCommits] = useState<any[]>([]);
   const [issues, setIssues] = useState<any[]>([]);
   const [pullRequests, setPullRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
   const [selectedDate, setSelectedDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const [aiSummary, setAiSummary] = useState<string>('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
 
   const params = useParams();
   const id = params?.id;
@@ -26,10 +31,11 @@ export default function SubscriptionDetail() {
       setLoading(true);
       try {
         const response = await axios.get(`/api/subscriptions/${id}?date=${selectedDate}`);
-        const { commits, issues, pullRequests } = response.data;
+        const { commits, issues, pullRequests, repositoryName } = response.data;
         setCommits(commits);
         setIssues(issues);
         setPullRequests(pullRequests);
+        setRepositoryName(repositoryName);
       } catch (error: any) {
         setMessage(`Error: ${error.response?.data?.error || error.message}`);
       } finally {
@@ -43,6 +49,42 @@ export default function SubscriptionDetail() {
   const handleDateChange = (date: Date | null) => {
     if (!date) return;
     setSelectedDate(dayjs(date).format('YYYY-MM-DD'));
+  };
+
+  const handleSummaryGeneration = async () => {
+    setAiSummary(''); // Reset the summary content
+    // setLoading(true); // Start loading indicator
+    setIsModalOpen(true);
+
+    try {
+      const response = await fetch('/api/ai-summary', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          commits,
+          issues,
+          pullRequests,
+        }),
+      });
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      let done = false;
+
+      while (!done) {
+        const { value, done: readerDone } = await reader!.read();
+        done = readerDone;
+
+        if (value) {
+          const chunk = decoder.decode(value, { stream: true });
+          setAiSummary((prevContent) => prevContent + chunk); // Append new chunk to existing content
+        }
+      }
+    } catch (error) {
+      setMessage(`Failed to generate AI summary ${error}`);
+    }
   };
 
   const typeStyles = {
@@ -61,7 +103,6 @@ export default function SubscriptionDetail() {
   };
 
   const renderCard = (data: any[], type: 'commits' | 'issues' | 'pullRequests') => {
-
     return data.map((item, index) => (
       <Card key={index} className={`p-4 ${typeStyles[type].card} border-l-4`}>
         <div className="flex items-center space-x-4">
@@ -87,7 +128,7 @@ export default function SubscriptionDetail() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Repository Updates</h1>
+      <h1 className="text-2xl font-bold mb-4">仓库名称: {repositoryName}</h1>
       {message && <Alert color="info">{message}</Alert>}
 
       <div className="mb-4">
@@ -101,6 +142,13 @@ export default function SubscriptionDetail() {
           className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
         />
       </div>
+
+      <button 
+        onClick={handleSummaryGeneration} 
+        className="mb-4 bg-indigo-600 text-white px-4 py-2 rounded hover:bg-indigo-700"
+      >
+        Generate AI Summary
+      </button>
 
       {loading ? (
         <div className="flex justify-center items-center p-4">
@@ -129,6 +177,21 @@ export default function SubscriptionDetail() {
             <ul className="space-y-4">{renderCard(pullRequests, 'pullRequests')}</ul>
           )}
         </div>
+      )}
+
+      {isModalOpen && (
+        <Modal show={isModalOpen} onClose={() => setIsModalOpen(false)}>
+          <Modal.Header>AI Summary</Modal.Header>
+          <Modal.Body>
+            {/* Render the markdown content as HTML */}
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {aiSummary}
+            </ReactMarkdown>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button onClick={() => setIsModalOpen(false)}>Close</Button>
+          </Modal.Footer>
+        </Modal>
       )}
     </div>
   );

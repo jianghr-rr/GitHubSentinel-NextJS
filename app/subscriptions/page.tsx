@@ -2,7 +2,7 @@
 "use client"
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Button, Card, TextInput, Select, Alert, Spinner } from 'flowbite-react';
+import { Button, Card, TextInput, Alert, Spinner } from 'flowbite-react';
 import { useRouter } from 'next/navigation';
 
 export default function SubscriptionManager() {
@@ -50,18 +50,18 @@ export default function SubscriptionManager() {
     }
   };
 
-  const handleUpdate = async (id: string, newPlan: string) => {
-    setLoading(true);
-    try {
-      const response = await axios.put('/api/subscriptions', { id, plan: newPlan });
-      setSubscriptions(subscriptions.map(sub => (sub.id === id ? response.data : sub)));
-      setMessage('Subscription updated!');
-    } catch (error: any) {
-      setMessage(`Error: ${error.response?.data?.error || error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
+  // const handleUpdate = async (id: string, newPlan: string) => {
+  //   setLoading(true);
+  //   try {
+  //     const response = await axios.put('/api/subscriptions', { id, plan: newPlan });
+  //     setSubscriptions(subscriptions.map(sub => (sub.id === id ? response.data : sub)));
+  //     setMessage('Subscription updated!');
+  //   } catch (error: any) {
+  //     setMessage(`Error: ${error.response?.data?.error || error.message}`);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
 
   const handleDelete = async (id: string) => {
     setLoading(true);
@@ -84,24 +84,20 @@ export default function SubscriptionManager() {
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Manage Your Subscriptions</h1>
+      <h1 className="text-2xl font-bold mb-4">管理你的订阅</h1>
       {message && <Alert color="info">{message}</Alert>}
+        <ul className="mb-6 space-y-2 text-gray-600">
+            <li>第一步：订阅自己关注的仓库</li>
+            <li>第二步：在订阅页面查看自己订阅的仓库的最新动态和AI Summary</li>
+        </ul>
         <>
           <Card>
             <TextInput
-              placeholder="Repository name"
+              placeholder="例子：https://github.com/facebook/react 就填入 facebook/react"
               value={repo}
               onChange={(e) => setRepo(e.target.value)}
               className="mb-4"
             />
-            <Select
-              value={plan}
-              onChange={(e) => setPlan(e.target.value)}
-              className="mb-4"
-            >
-              <option value="basic">Basic</option>
-              <option value="premium">Premium</option>
-            </Select>
             <Button onClick={handleSubscribe} gradientMonochrome="info">
               Subscribe
             </Button>
@@ -124,8 +120,11 @@ export default function SubscriptionManager() {
                     <p className="text-sm text-gray-500">{sub.plan}</p>
                   </div>
                   <div className="flex space-x-2">
-                    <Button onClick={() => handleUpdate(sub.id, 'premium')} size="xs">
+                    {/* <Button onClick={() => handleUpdate(sub.id, 'premium')} size="xs">
                       Upgrade to Premium
+                    </Button> */}
+                    <Button onClick={() => handleNavigateToDetail(sub.id)} size="xs">
+                      详情
                     </Button>
                     <Button onClick={() => handleDelete(sub.id)} size="xs" color="failure">
                       Delete
