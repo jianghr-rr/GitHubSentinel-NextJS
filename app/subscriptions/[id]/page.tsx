@@ -9,6 +9,11 @@ import { useParams } from 'next/navigation';
 import dayjs from 'dayjs';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import isBetween from 'dayjs/plugin/isBetween';
+import Link from 'next/link';
+
+// 使用 dayjs 插件
+dayjs.extend(isBetween);
 
 export default function SubscriptionDetail() {
   const [repositoryName, setRepositoryName] = useState('');
@@ -17,7 +22,8 @@ export default function SubscriptionDetail() {
   const [pullRequests, setPullRequests] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-  const [selectedDate, setSelectedDate] = useState(dayjs().format('YYYY-MM-DD'));
+  const [selectedStartDate, setSelectedStartDate] = useState(dayjs().subtract(1, 'month').format('YYYY-MM-DD'));
+  const [selectedEndDate, setSelectedEndDate] = useState(dayjs().format('YYYY-MM-DD'));
   const [aiSummary, setAiSummary] = useState<string>('');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -30,7 +36,7 @@ export default function SubscriptionDetail() {
     const fetchData = async () => {
       setLoading(true);
       try {
-        const response = await axios.get(`/api/subscriptions/${id}?date=${selectedDate}`);
+        const response = await axios.get(`/api/subscriptions/${id}?startDate=${selectedStartDate}&endDate=${selectedEndDate}`);
         const { commits, issues, pullRequests, repositoryName } = response.data;
         setCommits(commits);
         setIssues(issues);
@@ -44,16 +50,20 @@ export default function SubscriptionDetail() {
     };
 
     fetchData();
-  }, [id, selectedDate]);
+  }, [id, selectedStartDate, selectedEndDate]);
 
-  const handleDateChange = (date: Date | null) => {
+  const handleStartDateChange = (date: Date | null) => {
     if (!date) return;
-    setSelectedDate(dayjs(date).format('YYYY-MM-DD'));
+    setSelectedStartDate(dayjs(date).format('YYYY-MM-DD'));
+  };
+
+  const handleEndDateChange = (date: Date | null) => {
+    if (!date) return;
+    setSelectedEndDate(dayjs(date).format('YYYY-MM-DD'));
   };
 
   const handleSummaryGeneration = async () => {
-    setAiSummary(''); // Reset the summary content
-    // setLoading(true); // Start loading indicator
+    setAiSummary('');
     setIsModalOpen(true);
 
     try {
@@ -66,6 +76,8 @@ export default function SubscriptionDetail() {
           commits,
           issues,
           pullRequests,
+          startDate: selectedStartDate,
+          endDate: selectedEndDate,
         }),
       });
 
@@ -79,7 +91,7 @@ export default function SubscriptionDetail() {
 
         if (value) {
           const chunk = decoder.decode(value, { stream: true });
-          setAiSummary((prevContent) => prevContent + chunk); // Append new chunk to existing content
+          setAiSummary((prevContent) => prevContent + chunk);
         }
       }
     } catch (error) {
@@ -87,59 +99,85 @@ export default function SubscriptionDetail() {
     }
   };
 
-  const typeStyles = {
-    commits: {
-      card: 'bg-blue-100 border-blue-300 text-blue-800',
-      title: 'text-blue-800 mt-4',
-    },
-    issues: {
-      card: 'bg-yellow-100 border-yellow-300 text-yellow-800',
-      title: 'text-yellow-800 mt-4',
-    },
-    pullRequests: {
-      card: 'bg-green-100 border-green-300 text-green-800',
-      title: 'text-green-800 mt-4',
-    },
-  };
+  const renderCard = (data: any[], type: string) => {
+    return data.map((item, index) => {
+      let cardColor = '';
+      switch (type) {
+        case 'commits':
+          cardColor = 'bg-blue-100'; // 蓝色卡片
+          break;
+        case 'issues':
+          cardColor = 'bg-yellow-100'; // 黄色卡片
+          break;
+        case 'pullRequests':
+          cardColor = 'bg-green-100'; // 绿色卡片
+          break;
+        default:
+          cardColor = 'bg-gray-100'; // 默认灰色
+          break;
+      }
 
-  const renderCard = (data: any[], type: 'commits' | 'issues' | 'pullRequests') => {
-    return data.map((item, index) => (
-      <Card key={index} className={`p-4 ${typeStyles[type].card} border-l-4`}>
-        <div className="flex items-center space-x-4">
-          <Image
-            src={item.user?.avatar_url || item.commit?.author?.avatar_url || item.author?.avatar_url || '/default-avatar.png'}
-            alt={item.user?.login || item.commit?.author?.name || item.author?.login || 'Author'}
-            width={40}
-            height={40}
-            className="rounded-full border-2 border-white shadow-sm"
-          />
-          <div>
-            <h3 className={`text-lg font-semibold ${typeStyles[type].title}`}>{item.user?.login || item.commit?.author?.name}</h3>
-            <p className="text-sm text-gray-500">{item.title || item.commit?.message}</p>
-            <p className="text-xs text-gray-400 mt-4">{dayjs(item.created_at).format('YYYY-MM-DD HH:mm')}</p>
-            <a href={item.html_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
-              View More
-            </a>
+      console.log('item', item);
+      const avatarUrl = item.commit?.author?.avatar_url || item.author?.avatar_url || item.user?.avatar_url; // 获取头像 URL
+
+      return (
+        <Card key={index} className={`mb-4 ${cardColor}`}>
+          <div className="flex items-center">
+            {/* 头像 */}
+            <Image
+              src={avatarUrl || '/default-avatar.png'} // 默认头像，如果没有提供
+              alt="Avatar"
+              width={40}
+              height={40}
+              className="rounded-full mr-4"
+            />
+            <div>
+              <h5 className="text-lg font-medium text-gray-900">
+                {item.title || item.commit?.message}
+              </h5>
+              <p className="text-sm text-gray-500">
+                {type === 'commits' && `Committed by ${item.commit.author.name} on ${dayjs(item.commit.author.date).format('YYYY-MM-DD')}`}
+                {type === 'issues' && `Created on ${dayjs(item.created_at).format('YYYY-MM-DD')}`}
+                {type === 'pullRequests' && `Created on ${dayjs(item.created_at).format('YYYY-MM-DD')}`}
+              </p>
+            </div>
           </div>
-        </div>
-      </Card>
-    ));
+
+          {/* 点击卡片跳转到详情页 */}
+          <Link target='_blank' href={item.html_url} className="text-blue-600 hover:text-blue-800">
+            View details
+          </Link>
+        </Card>
+      );
+    });
   };
 
   return (
     <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">仓库名称: {repositoryName}</h1>
+      <h1 className="text-2xl font-bold mb-4">Repository: {repositoryName}</h1>
       {message && <Alert color="info">{message}</Alert>}
 
       <div className="mb-4">
-        <label htmlFor="date" className="block text-sm font-medium text-gray-700">
-          Select Date
+        <label htmlFor="start-date" className="block text-sm font-medium text-gray-700">
+          Start Date
         </label>
         <Datepicker
-          id="date"
-          value={new Date(selectedDate)}
-          onChange={(date: Date | null) => handleDateChange(date)}
-          className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
+          id="start-date"
+          value={new Date(selectedStartDate)}
+          onChange={(date: Date | null) => handleStartDateChange(date)}
+          className="mt-1 block w-full"
+        />
+      </div>
+
+      <div className="mb-4">
+        <label htmlFor="end-date" className="block text-sm font-medium text-gray-700">
+          End Date
+        </label>
+        <Datepicker
+          id="end-date"
+          value={new Date(selectedEndDate)}
+          onChange={(date: Date | null) => handleEndDateChange(date)}
+          className="mt-1 block w-full"
         />
       </div>
 
@@ -156,25 +194,25 @@ export default function SubscriptionDetail() {
         </div>
       ) : (
         <div>
-          <h2 className={`text-xl font-semibold ${typeStyles.commits.title}`}>Commits</h2>
+          <h2 className="text-xl font-semibold">Commits</h2>
           {commits.length === 0 ? (
-            <p>No commits found for this date.</p>
+            <p>No commits found for this date range.</p>
           ) : (
-            <ul className="space-y-4">{renderCard(commits, 'commits')}</ul>
+            <ul>{renderCard(commits, 'commits')}</ul>
           )}
 
-          <h2 className={`text-xl font-semibold ${typeStyles.issues.title}`}>Issues</h2>
+          <h2 className="text-xl font-semibold">Issues</h2>
           {issues.length === 0 ? (
-            <p>No issues found for this date.</p>
+            <p>No issues found for this date range.</p>
           ) : (
-            <ul className="space-y-4">{renderCard(issues, 'issues')}</ul>
+            <ul>{renderCard(issues, 'issues')}</ul>
           )}
 
-          <h2 className={`text-xl font-semibold ${typeStyles.pullRequests.title}`}>Pull Requests</h2>
+          <h2 className="text-xl font-semibold">Pull Requests</h2>
           {pullRequests.length === 0 ? (
-            <p>No pull requests found for this date.</p>
+            <p>No pull requests found for this date range.</p>
           ) : (
-            <ul className="space-y-4">{renderCard(pullRequests, 'pullRequests')}</ul>
+            <ul>{renderCard(pullRequests, 'pullRequests')}</ul>
           )}
         </div>
       )}
@@ -183,7 +221,6 @@ export default function SubscriptionDetail() {
         <Modal show={isModalOpen} onClose={() => setIsModalOpen(false)}>
           <Modal.Header>AI Summary</Modal.Header>
           <Modal.Body>
-            {/* Render the markdown content as HTML */}
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {aiSummary}
             </ReactMarkdown>

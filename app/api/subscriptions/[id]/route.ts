@@ -4,6 +4,9 @@ import axios from 'axios';
 import { auth } from '~/auth';
 import { NextResponse, NextRequest } from 'next/server';
 import dayjs from 'dayjs';
+import isBetween from 'dayjs/plugin/isBetween';
+
+dayjs.extend(isBetween);
 
 const prisma = new PrismaClient();
 
@@ -21,35 +24,37 @@ async function fetchRepositoryInfo(repo: string) {
 }
 
 // 获取指定仓库的提交信息
-async function fetchCommits(repo: string, date: string) {
+async function fetchCommits(repo: string, startDate: string, endDate: string) {
   const response = await axios.get(`${GITHUB_API_URL}/${repo}/commits`, {
     headers: {
       Authorization: `token ${GITHUB_API_TOKEN}`,
     },
     params: {
-      since: dayjs(date).startOf('day').toISOString(),
-      until: dayjs(date).endOf('day').toISOString(),
+      since: dayjs(startDate).startOf('day').toISOString(),
+      until: dayjs(endDate).endOf('day').toISOString(),
     },
   });
   return response.data;
 }
 
 // 获取指定仓库的议题信息
-async function fetchIssues(repo: string, date: string) {
+async function fetchIssues(repo: string, startDate: string, endDate: string) {
   const response = await axios.get(`${GITHUB_API_URL}/${repo}/issues`, {
     headers: {
       Authorization: `token ${GITHUB_API_TOKEN}`,
     },
     params: {
-      since: dayjs(date).startOf('day').toISOString(),
+      since: dayjs(startDate).startOf('day').toISOString(),
       state: 'all',
     },
   });
-  return response.data.filter((issue: any) => dayjs(issue.created_at).isSame(date, 'day'));
+  return response.data.filter((issue: any) => 
+    dayjs(issue.created_at).isBetween(startDate, endDate, null, '[]')
+  );
 }
 
 // 获取指定仓库的拉取请求信息
-async function fetchPullRequests(repo: string, date: string) {
+async function fetchPullRequests(repo: string, startDate: string, endDate: string) {
   const response = await axios.get(`${GITHUB_API_URL}/${repo}/pulls`, {
     headers: {
       Authorization: `token ${GITHUB_API_TOKEN}`,
@@ -58,8 +63,11 @@ async function fetchPullRequests(repo: string, date: string) {
       state: 'all',
     },
   });
-  return response.data.filter((pr: any) => dayjs(pr.created_at).isSame(date, 'day'));
+  return response.data.filter((pr: any) => 
+    dayjs(pr.created_at).isBetween(startDate, endDate, null, '[]')
+  );
 }
+
 
 // 处理 GET 请求 - 获取指定订阅的更新信息
 export async function GET(req: NextRequest) {
@@ -77,17 +85,18 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Subscription not found' }, { status: 404 });
       }
 
-      const url = new URL(req.url);
-      const date = url.searchParams.get('date') || dayjs().format('YYYY-MM-DD');
+      // 获取日期范围参数
+      const startDate = url.searchParams.get('startDate') || dayjs().subtract(1, 'month').format('YYYY-MM-DD');
+      const endDate = url.searchParams.get('endDate') || dayjs().format('YYYY-MM-DD');
 
       // 获取 GitHub 仓库的详细信息，包括名称
       const repositoryInfo = await fetchRepositoryInfo(subscription.repo);
 
       // 获取 GitHub 仓库的动态
       const [commits, issues, pullRequests] = await Promise.all([
-        fetchCommits(subscription.repo, date),
-        fetchIssues(subscription.repo, date),
-        fetchPullRequests(subscription.repo, date),
+        fetchCommits(subscription.repo, startDate, endDate),
+        fetchIssues(subscription.repo, startDate, endDate),
+        fetchPullRequests(subscription.repo, startDate, endDate),
       ]);
 
       return NextResponse.json({
@@ -104,3 +113,4 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 }
+
